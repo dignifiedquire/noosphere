@@ -13,8 +13,7 @@ pub async fn make_disposable_store() -> Result<NativeStore> {
         .into_iter()
         .map(String::from)
         .collect();
-    let db = sled::open(temp_dir.join(temp_name)).unwrap();
-    let provider = NativeStorage::new(NativeStorageInit::Db(db))?;
+    let provider = NativeStorage::new(NativeStorageInit::Path(temp_dir.join(temp_name)))?;
     provider.get_block_store("foo").await
 }
 

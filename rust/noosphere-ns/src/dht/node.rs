@@ -208,7 +208,7 @@ impl DhtNode {
 
     async fn send_request(&self, request: DhtRequest) -> Result<DhtResponse, DhtError> {
         self.client
-            .send_request_async(request)
+            .send(request)
             .await
             .map_err(DhtError::from)
             .and_then(|res| res)
