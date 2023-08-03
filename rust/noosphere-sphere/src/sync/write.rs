@@ -1,8 +1,12 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use noosphere_core::data::{Link, MemoIpld};
+use noosphere_core::{
+    authority::Authorization,
+    data::{Link, MemoIpld},
+};
 use noosphere_storage::Storage;
 
+use crate::{internal::SphereContextInternal, HasSphereContext};
 use crate::{HasMutableSphereContext, SyncError, SyncRecovery};
 
 use crate::GatewaySyncStrategy;
@@ -35,6 +39,17 @@ where
     #[instrument(level = "debug", skip(self))]
     async fn sync(&mut self, recovery: SyncRecovery) -> Result<Link<MemoIpld>, SyncError> {
         debug!("Attempting to sync...");
+
+        // Check that the author has write access to sync.
+        // If a sphere was joined from another sphere, do not check,
+        // but allow sync to proceed, as the local sphere does not have
+        // local proof until after initial sync. If truly no write access is
+        // available, the gateway will reject this sync.
+        if !is_sphere_joined(self).await {
+            self.assert_write_access()
+                .await
+                .map_err(|_| SyncError::InsufficientPermission)?;
+        }
 
         let sync_strategy = GatewaySyncStrategy::default();
 
@@ -77,4 +92,32 @@ where
 
         Ok(version)
     }
+}
+
+/// Given a `HasSphereContext<S>`, return a boolean indicating
+/// whether or not this sphere has been joined from another sphere
+/// (e.g. possibly lacking local authorization until syncing with a gateway).
+async fn is_sphere_joined<C, S>(context: &C) -> bool
+where
+    C: HasSphereContext<S>,
+    S: Storage + 'static,
+{
+    let context = {
+        let context = context.sphere_context().await;
+        if context.is_err() {
+            return false;
+        }
+        context.unwrap()
+    };
+
+    let author = context.author();
+
+    let auth = {
+        let auth = author.require_authorization();
+        if auth.is_err() {
+            return false;
+        }
+        auth.unwrap()
+    };
+    matches!(auth, Authorization::Cid(_))
 }

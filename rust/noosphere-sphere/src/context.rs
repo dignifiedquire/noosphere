@@ -271,6 +271,7 @@ mod tests {
     use crate::{
         helpers::{simulated_sphere_context, SimulationAccess},
         HasMutableSphereContext, HasSphereContext, SphereContentWrite, SpherePetnameWrite,
+        SphereSync, SyncError,
     };
 
     #[cfg(target_arch = "wasm32")]
@@ -444,6 +445,21 @@ mod tests {
             .set_petname_record("foo", records.get(1).unwrap())
             .await
             .is_err());
+        Ok(())
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
+    async fn it_requires_write_access_to_sync() -> Result<()> {
+        initialize_tracing(None);
+
+        let (mut sphere_context, _) =
+            simulated_sphere_context(SimulationAccess::Readonly, None).await?;
+
+        assert!(matches!(
+            sphere_context.sync(crate::SyncRecovery::None).await,
+            Err(SyncError::InsufficientPermission)
+        ));
         Ok(())
     }
 }
