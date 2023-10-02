@@ -111,6 +111,7 @@ impl IpfsClient for KuboClient {
         form.add_async_reader("file", Box::pin(car).compat());
 
         api_url.set_path("/api/v0/dag/import");
+        // api_url.set_query(Some("pin-roots=false"));
 
         let request_builder = Request::builder().method("POST").uri(&api_url.to_string());
         let request = form.set_body_convert::<Body, MultipartBody>(request_builder)?;
