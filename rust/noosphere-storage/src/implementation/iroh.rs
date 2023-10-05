@@ -74,6 +74,11 @@ impl Storage for IrohStorage {
     }
 
     async fn get_key_value_store(&self, name: &str) -> Result<Self::KeyValueStore> {
+        // Current implementation is to use a single DB for all stores, with each store
+        // being represented by a single Table. If there is too much write contention
+        // between the different kv stores, this would need to be replaced with having a
+        // DB per store.
+
         if let Some(name) = SPHERE_DB_STORE_NAMES.iter().find(|val| **val == name) {
             let db = RedbStore::new(self.db.clone(), *name).await?;
             Ok(db)
