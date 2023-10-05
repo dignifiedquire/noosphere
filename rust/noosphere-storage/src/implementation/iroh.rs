@@ -9,14 +9,23 @@ use iroh::bytes::{
     Hash,
 };
 use iroh_io::AsyncSliceReaderExt;
+use libipld_cbor::DagCborCodec;
+use libipld_core::{
+    codec::{Codec, Decode},
+    ipld::Ipld,
+    serde::{from_ipld, to_ipld},
+};
 use noosphere_common::ConditionalSend;
+use redb::{Database, ReadableTable, TableDefinition};
 use serde::{de::DeserializeOwned, Serialize};
-use std::path::PathBuf;
+use std::sync::Arc;
+use std::{io::Cursor, path::PathBuf};
 
 #[derive(Clone, Debug)]
 pub struct IrohStorage {
     rt: iroh::bytes::util::runtime::Handle,
     path: PathBuf,
+    db: Arc<Database>,
 }
 
 impl IrohStorage {
@@ -25,9 +34,17 @@ impl IrohStorage {
         let canonicalized = path.canonicalize()?;
         let rt = iroh::bytes::util::runtime::Handle::from_current(1)?;
 
+        let redb_path = path.join("meta.redb");
+        let db = if redb_path.exists() {
+            Database::open(redb_path)?
+        } else {
+            Database::create(redb_path)?
+        };
+
         Ok(IrohStorage {
             rt,
             path: canonicalized,
+            db: Arc::new(db),
         })
     }
 }
@@ -53,29 +70,30 @@ impl Storage for IrohStorage {
             return Err(anyhow!("No such store named {}", name));
         }
 
-        IrohStore::new(&self.path, &self.rt, name)
+        IrohStore::new(&self.path, &self.rt, name).await
     }
 
     async fn get_key_value_store(&self, name: &str) -> Result<Self::KeyValueStore> {
-        if SPHERE_DB_STORE_NAMES
-            .iter()
-            .find(|val| **val == name)
-            .is_none()
-        {
-            return Err(anyhow!("No such store named {}", name));
+        if let Some(name) = SPHERE_DB_STORE_NAMES.iter().find(|val| **val == name) {
+            let db = RedbStore::new(self.db.clone(), *name).await?;
+            Ok(db)
+        } else {
+            Err(anyhow!("No such store named {}", name))
         }
-        RedbStore::new(name)
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct IrohStore {
     db: iroh::baomap::flat::Store,
-    name: String,
 }
 
 impl IrohStore {
-    fn new(root: &PathBuf, rt: &iroh::bytes::util::runtime::Handle, name: &str) -> Result<Self> {
+    async fn new(
+        root: &PathBuf,
+        rt: &iroh::bytes::util::runtime::Handle,
+        name: &str,
+    ) -> Result<Self> {
         let complete_path = root.join(name).join("complete");
         let partial_path = root.join(name).join("partial");
         let meta_path = root.join(name).join("meta");
@@ -85,12 +103,9 @@ impl IrohStore {
         std::fs::create_dir_all(&meta_path)?;
 
         let db =
-            iroh::baomap::flat::Store::load_blocking(complete_path, partial_path, meta_path, rt)?;
+            iroh::baomap::flat::Store::load(complete_path, partial_path, meta_path, rt).await?;
 
-        Ok(Self {
-            db,
-            name: name.to_string(),
-        })
+        Ok(Self { db })
     }
 }
 
@@ -123,16 +138,29 @@ impl BlockStore for IrohStore {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct RedbStore {
-    name: String,
+    table: TableDefinition<'static, &'static [u8], &'static [u8]>,
+    db: Arc<Database>,
 }
 
 impl RedbStore {
-    fn new(name: &str) -> Result<Self> {
-        Ok(Self {
-            name: name.to_string(),
+    async fn new(db: Arc<Database>, name: &'static str) -> Result<Self> {
+        let table = TableDefinition::new(name);
+
+        // Make sure the table exists
+        let db0 = db.clone();
+        tokio::task::spawn_blocking(move || {
+            let write_tx = db0.begin_write()?;
+            {
+                let _table = write_tx.open_table(table)?;
+            }
+            write_tx.commit()?;
+            anyhow::Ok(())
         })
+        .await??;
+
+        Ok(Self { table, db })
     }
 }
 
@@ -143,7 +171,25 @@ impl KeyValueStore for RedbStore {
         K: AsRef<[u8]> + ConditionalSend,
         V: Serialize + ConditionalSend,
     {
-        todo!()
+        let ipld = to_ipld(value)?;
+        let codec = DagCborCodec;
+        let cbor = codec.encode(&ipld)?;
+
+        let db = self.db.clone();
+        let key_bytes: Vec<u8> = K::as_ref(&key).to_vec(); // sad face
+        let table = self.table;
+        tokio::task::spawn_blocking(move || {
+            let write_tx = db.begin_write()?;
+            {
+                let mut table = write_tx.open_table(table)?;
+                table.insert(&key_bytes[..], &cbor[..])?;
+            }
+            write_tx.commit()?;
+            anyhow::Ok(())
+        })
+        .await??;
+
+        Ok(())
     }
 
     async fn get_key<K, V>(&self, key: K) -> Result<Option<V>>
@@ -151,13 +197,45 @@ impl KeyValueStore for RedbStore {
         K: AsRef<[u8]> + ConditionalSend,
         V: DeserializeOwned + ConditionalSend,
     {
-        todo!()
+        let db = self.db.clone();
+        let key_bytes: Vec<u8> = K::as_ref(&key).to_vec(); // sad face
+        let table = self.table;
+        let res: Option<Ipld> = tokio::task::spawn_blocking(move || {
+            let read_tx = db.begin_read()?;
+            let table = read_tx.open_table(table)?;
+            let maybe_guard = table.get(&key_bytes[..])?;
+            match maybe_guard {
+                Some(guard) => {
+                    let value = Ipld::decode(DagCborCodec, &mut Cursor::new(guard.value()))?;
+                    anyhow::Ok(Some(value))
+                }
+                None => Ok(None),
+            }
+        })
+        .await??;
+
+        let res = res.map(from_ipld).transpose()?;
+        Ok(res)
     }
 
     async fn unset_key<K>(&mut self, key: K) -> Result<()>
     where
         K: AsRef<[u8]> + ConditionalSend,
     {
-        todo!()
+        let db = self.db.clone();
+        let key_bytes: Vec<u8> = K::as_ref(&key).to_vec(); // sad face
+        let table = self.table;
+        tokio::task::spawn_blocking(move || {
+            let write_tx = db.begin_write()?;
+            {
+                let mut table = write_tx.open_table(table)?;
+                table.remove(&key_bytes[..])?;
+            }
+            write_tx.commit()?;
+            anyhow::Ok(())
+        })
+        .await??;
+
+        Ok(())
     }
 }
