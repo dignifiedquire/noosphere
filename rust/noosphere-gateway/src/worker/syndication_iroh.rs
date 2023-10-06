@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use iroh::bytes::util::runtime::Handle;
-use iroh::node::Node;
+use iroh::node::{Node, DEFAULT_BIND_ADDR};
 use iroh::rpc_protocol::{DocTicket, ProviderRequest, ProviderResponse};
 use iroh::sync::AuthorId;
 use libipld_cbor::DagCborCodec;
@@ -83,10 +83,11 @@ struct Iroh {
 
 impl Iroh {
     async fn from_ticket(ticket: DocTicket) -> Result<Self> {
-        let root = PathBuf::from("./iroh");
+        warn!("Starting iroh");
+        let root = PathBuf::from("./.iroh");
+        tokio::fs::create_dir_all(&root).await?;
         let rt = Handle::from_current(1)?;
 
-        let bind_addr: SocketAddr = "0.0.0.0:9999".parse().unwrap();
         let peers_data_path = root.join("peers");
         let docs_path = root.join("docs.db");
         let doc_store = iroh::sync::store::fs::Store::new(&docs_path)?;
@@ -100,7 +101,7 @@ impl Iroh {
         // TODO: persist & load the nodes key
 
         let node = Node::builder(bao_store, doc_store)
-            .bind_addr(bind_addr)
+            .bind_addr(DEFAULT_BIND_ADDR.into())
             .derp_mode(iroh::net::derp::DerpMode::Default)
             .peers_data_path(peers_data_path)
             .runtime(&rt)
@@ -113,6 +114,7 @@ impl Iroh {
         // TODO: persist author
         let author = client.authors.create().await?;
 
+        warn!("iroh is now running");
         Ok(Iroh {
             node,
             client,
