@@ -9,13 +9,14 @@ use url::Url;
 
 use crate::native::workspace::Workspace;
 
-use noosphere_gateway::{start_gateway, GatewayScope};
+use noosphere_gateway::{start_gateway, DocTicket, GatewayScope};
 
 /// Start a Noosphere gateway server
 pub async fn serve(
     interface: IpAddr,
     port: u16,
     ipfs_api: Url,
+    iroh_ticket: DocTicket,
     name_resolver_api: Url,
     cors_origin: Option<Url>,
     workspace: &Workspace,
@@ -40,6 +41,7 @@ pub async fn serve(
         gateway_scope,
         sphere_context,
         ipfs_api,
+        iroh_ticket,
         name_resolver_api,
         cors_origin,
     )

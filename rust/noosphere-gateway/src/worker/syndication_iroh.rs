@@ -130,12 +130,12 @@ where
     let SyndicationJobIroh { revision, context } = job;
     debug!("Attempting to syndicate version DAG {revision} to iroh");
     let iroh_identity = iroh.node.peer_id();
-    let checkpoint_key = format!("syndication/kubo/{iroh_identity}");
+    let checkpoint_key = format!("syndication/iroh/{iroh_identity}");
 
     debug!("Iroh node identified as {}", iroh_identity);
 
     // Take a lock on the `SphereContext` and look up the most recent
-    // syndication checkpoint for this Kubo node
+    // syndication checkpoint for this iroh node
     let (sphere_revision, syndication_checkpoint, db) = {
         let db = {
             let context = context.sphere_context().await?;

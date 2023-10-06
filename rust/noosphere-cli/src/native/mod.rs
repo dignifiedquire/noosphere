@@ -114,6 +114,7 @@ pub async fn invoke_cli(cli: Cli, mut workspace: Workspace) -> Result<()> {
         OrbCommand::Serve {
             cors_origin,
             ipfs_api,
+            iroh_ticket,
             name_resolver_api,
             interface,
             port,
@@ -122,6 +123,7 @@ pub async fn invoke_cli(cli: Cli, mut workspace: Workspace) -> Result<()> {
                 interface,
                 port,
                 ipfs_api,
+                iroh_ticket,
                 name_resolver_api,
                 cors_origin,
                 &workspace,
