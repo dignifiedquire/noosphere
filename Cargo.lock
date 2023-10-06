@@ -167,12 +167,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "250f629c0161ad8107cf89319e990051fae62832fd343083bea452d93e2205fd"
 
 [[package]]
-name = "allocator-api2"
-version = "0.2.16"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0942ffc6dcaadf03badf6e6a2d0228460359d5e34b57ccdc720b7382dfbd5ec5"
-
-[[package]]
 name = "android-tzdata"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2429,10 +2423,6 @@ name = "hashbrown"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c6201b9ff9fd90a5a3bac2e56a830d0caa509576f0e503818ee82c181b3437a"
-dependencies = [
- "ahash 0.8.3",
- "allocator-api2",
-]
 
 [[package]]
 name = "headers"
@@ -2900,7 +2890,7 @@ checksum = "28b29a3cd74f0f4598934efe3aeba42bae0eb4680554128851ebbecb02af14e6"
 [[package]]
 name = "iroh"
 version = "0.6.0"
-source = "git+https://github.com/n0-computer/iroh?branch=main#31f08bb082b3a568634c6afc79ead077e069b167"
+source = "git+https://github.com/n0-computer/iroh?branch=sync-propagation#44a61553b83960823e080740d118ef900f27b0f0"
 dependencies = [
  "anyhow",
  "bao-tree",
@@ -2955,7 +2945,7 @@ dependencies = [
 [[package]]
 name = "iroh-bytes"
 version = "0.6.0"
-source = "git+https://github.com/n0-computer/iroh?branch=main#31f08bb082b3a568634c6afc79ead077e069b167"
+source = "git+https://github.com/n0-computer/iroh?branch=sync-propagation#44a61553b83960823e080740d118ef900f27b0f0"
 dependencies = [
  "anyhow",
  "bao-tree",
@@ -3005,7 +2995,7 @@ dependencies = [
 [[package]]
 name = "iroh-gossip"
 version = "0.6.0"
-source = "git+https://github.com/n0-computer/iroh?branch=main#31f08bb082b3a568634c6afc79ead077e069b167"
+source = "git+https://github.com/n0-computer/iroh?branch=sync-propagation#44a61553b83960823e080740d118ef900f27b0f0"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3045,7 +3035,7 @@ dependencies = [
 [[package]]
 name = "iroh-metrics"
 version = "0.6.0"
-source = "git+https://github.com/n0-computer/iroh?branch=main#31f08bb082b3a568634c6afc79ead077e069b167"
+source = "git+https://github.com/n0-computer/iroh?branch=sync-propagation#44a61553b83960823e080740d118ef900f27b0f0"
 dependencies = [
  "erased_set",
  "hyper",
@@ -3059,7 +3049,7 @@ dependencies = [
 [[package]]
 name = "iroh-net"
 version = "0.6.0"
-source = "git+https://github.com/n0-computer/iroh?branch=main#31f08bb082b3a568634c6afc79ead077e069b167"
+source = "git+https://github.com/n0-computer/iroh?branch=sync-propagation#44a61553b83960823e080740d118ef900f27b0f0"
 dependencies = [
  "aead 0.5.2",
  "anyhow",
@@ -3130,7 +3120,7 @@ dependencies = [
 [[package]]
 name = "iroh-sync"
 version = "0.6.0"
-source = "git+https://github.com/n0-computer/iroh?branch=main#31f08bb082b3a568634c6afc79ead077e069b167"
+source = "git+https://github.com/n0-computer/iroh?branch=sync-propagation#44a61553b83960823e080740d118ef900f27b0f0"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3145,7 +3135,6 @@ dependencies = [
  "iroh-bytes",
  "iroh-metrics",
  "iroh-net",
- "lru 0.11.1",
  "once_cell",
  "ouroboros",
  "parking_lot 0.12.1",
@@ -3477,7 +3466,7 @@ dependencies = [
  "libp2p-identity",
  "libp2p-swarm",
  "log",
- "lru 0.10.1",
+ "lru",
  "quick-protobuf",
  "quick-protobuf-codec",
  "smallvec",
@@ -3791,15 +3780,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "718e8fae447df0c7e1ba7f5189829e63fd536945c8988d61444c19039f16b670"
 dependencies = [
  "hashbrown 0.13.2",
-]
-
-[[package]]
-name = "lru"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4a83fb7698b3643a0e34f9ae6f2e8f0178c0fd42f8b59d493aa271ff3a5bf21"
-dependencies = [
- "hashbrown 0.14.0",
 ]
 
 [[package]]
