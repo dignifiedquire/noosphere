@@ -1,6 +1,7 @@
 use std::io::Cursor;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use anyhow::Result;
 use iroh::bytes::util::runtime::Handle;
@@ -111,8 +112,16 @@ impl Iroh {
 
         let doc = client.docs.import(ticket).await?;
 
-        // TODO: persist author
-        let author = client.authors.create().await?;
+        let author_path = root.join("author");
+        let author = if author_path.exists() {
+            let author_raw = tokio::fs::read_to_string(&author_path).await?;
+            let author: AuthorId = author_raw.parse()?;
+            author
+        } else {
+            let author = client.authors.create().await?;
+            tokio::fs::write(&author_path, author.to_string()).await?;
+            author
+        };
 
         warn!("iroh is now running");
         Ok(Iroh {
