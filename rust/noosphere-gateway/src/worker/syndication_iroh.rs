@@ -1,13 +1,13 @@
 use std::io::Cursor;
-use std::net::SocketAddr;
-use std::path::PathBuf;
-use std::str::FromStr;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use iroh::bytes::util::runtime::Handle;
 use iroh::node::{Node, DEFAULT_BIND_ADDR};
 use iroh::rpc_protocol::{DocTicket, ProviderRequest, ProviderResponse};
 use iroh::sync::AuthorId;
+use iroh::util::fs::load_secret_key;
+use iroh::util::path::IrohPaths;
 use libipld_cbor::DagCborCodec;
 use noosphere_core::context::{
     metadata::COUNTERPART, HasMutableSphereContext, SphereContentRead, SphereContentWrite,
@@ -37,6 +37,7 @@ pub struct SyndicationJobIroh<C> {
 }
 
 pub fn start_iroh_syndication<C, S>(
+    sphere_path: impl AsRef<Path>,
     iroh_ticket: DocTicket,
 ) -> (
     UnboundedSender<SyndicationJobIroh<C>>,
@@ -50,11 +51,16 @@ where
 
     (
         tx,
-        tokio::task::spawn(iroh_syndication_task(iroh_ticket, rx)),
+        tokio::task::spawn(iroh_syndication_task(
+            sphere_path.as_ref().to_path_buf(),
+            iroh_ticket,
+            rx,
+        )),
     )
 }
 
 async fn iroh_syndication_task<C, S>(
+    sphere_path: PathBuf,
     ticket: DocTicket,
     mut receiver: UnboundedReceiver<SyndicationJobIroh<C>>,
 ) -> Result<()>
@@ -64,7 +70,7 @@ where
 {
     debug!("Syndicating sphere revisions to Iroh");
 
-    let iroh_client = Iroh::from_ticket(ticket).await?;
+    let iroh_client = Iroh::from_ticket(sphere_path, ticket).await?;
 
     while let Some(job) = receiver.recv().await {
         if let Err(error) = process_job(job, iroh_client.clone()).await {
@@ -77,32 +83,47 @@ where
 #[derive(Clone)]
 struct Iroh {
     node: Node<iroh::baomap::flat::Store, iroh::sync::store::fs::Store>,
+    #[allow(dead_code)]
     client: iroh::client::Iroh<FlumeConnection<ProviderResponse, ProviderRequest>>,
     doc: iroh::client::Doc<FlumeConnection<ProviderResponse, ProviderRequest>>,
     author: AuthorId,
 }
 
 impl Iroh {
-    async fn from_ticket(ticket: DocTicket) -> Result<Self> {
-        warn!("Starting iroh");
-        let root = PathBuf::from("./.iroh");
+    async fn from_ticket(sphere_path: PathBuf, ticket: DocTicket) -> Result<Self> {
+        let root = sphere_path.join("storage").join("iroh");
+        debug!("Starting iroh at {}", root.display());
+
         tokio::fs::create_dir_all(&root).await?;
+
         let rt = Handle::from_current(1)?;
 
-        let peers_data_path = root.join("peers");
-        let docs_path = root.join("docs.db");
+        let peers_data_path = IrohPaths::PeerData.with_root(&root);
+        let docs_path = IrohPaths::DocsDatabase.with_root(&root);
         let doc_store = iroh::sync::store::fs::Store::new(&docs_path)?;
 
-        // TODO: load iroh-bytes store if the block store is an iroh store
-        let blob_path = root.join("blobs.db");
-        tokio::fs::create_dir_all(&blob_path).await?;
+        // Optimization: load iroh-bytes store if the block store is an iroh store
+
+        let complete_path = IrohPaths::BaoFlatStoreComplete.with_root(&root);
+        let partial_path = IrohPaths::BaoFlatStorePartial.with_root(&root);
+        let meta_path = IrohPaths::BaoFlatStoreMeta.with_root(&root);
+
+        tokio::fs::create_dir_all(&complete_path).await?;
+        tokio::fs::create_dir_all(&partial_path).await?;
+        tokio::fs::create_dir_all(&meta_path).await?;
+
         let bao_store =
-            iroh::baomap::flat::Store::load(&blob_path, &blob_path, &blob_path, &rt).await?;
+            iroh::baomap::flat::Store::load(&complete_path, &partial_path, &meta_path, &rt).await?;
 
         // TODO: persist & load the nodes key
 
+        let key_path = IrohPaths::SecretKey.with_root(&root);
+        tokio::fs::create_dir_all(&meta_path).await?;
+        let secret_key = load_secret_key(key_path).await?;
+
         let node = Node::builder(bao_store, doc_store)
             .bind_addr(DEFAULT_BIND_ADDR.into())
+            .secret_key(secret_key)
             .derp_mode(iroh::net::derp::DerpMode::Default)
             .peers_data_path(peers_data_path)
             .runtime(&rt)
@@ -123,7 +144,6 @@ impl Iroh {
             author
         };
 
-        warn!("iroh is now running");
         Ok(Iroh {
             node,
             client,

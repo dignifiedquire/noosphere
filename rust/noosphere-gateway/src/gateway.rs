@@ -8,6 +8,7 @@ use noosphere_core::data::Did;
 use noosphere_ipfs::KuboClient;
 use noosphere_storage::Storage;
 use std::net::TcpListener;
+use std::path::Path;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use url::Url;
@@ -43,6 +44,7 @@ pub async fn start_gateway<C, S>(
     sphere_context: C,
     ipfs_api: Url,
     iroh_ticket: DocTicket,
+    sphere_path: impl AsRef<Path>,
     name_resolver_api: Url,
     cors_origin: Option<Url>,
 ) -> Result<()>
@@ -77,7 +79,8 @@ where
             ]);
     }
 
-    let (syndication_tx, syndication_task) = start_iroh_syndication::<C, S>(iroh_ticket);
+    let (syndication_tx, syndication_task) =
+        start_iroh_syndication::<C, S>(sphere_path, iroh_ticket);
     let ipfs_client = KuboClient::new(&ipfs_api)?;
     let (name_system_tx, name_system_task) = start_name_system::<C, S>(
         NameSystemConfiguration {

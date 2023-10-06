@@ -35,6 +35,8 @@ pub async fn serve(
     };
 
     let sphere_context = workspace.sphere_context().await?;
+    let paths = workspace.require_sphere_paths()?;
+    let sphere_path = paths.sphere();
 
     start_gateway(
         listener,
@@ -42,6 +44,7 @@ pub async fn serve(
         sphere_context,
         ipfs_api,
         iroh_ticket,
+        sphere_path,
         name_resolver_api,
         cors_origin,
     )
